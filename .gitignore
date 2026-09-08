@@ -1,0 +1,6 @@
+application.properties
+logs/
+target/
+.idea/
+*.iml
+
