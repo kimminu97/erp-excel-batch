@@ -37,7 +37,7 @@ import java.util.Set;
 /** ResultSet을 일반적인 Excel 통합 문서로 저장합니다. */
 public final class ExcelService {
     private static final Logger log = LoggerFactory.getLogger(ExcelService.class);
-    private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyMMdd_HHmm");
     private static final int REPORT_COLUMN_COUNT = 33;
     private static final int[] COLUMN_WIDTHS = {16, 16, 13, 18, 16, 16, 16, 16, 25, 16, 16, 8, 16, 8, 16, 8,
             16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 10, 15, 16, 10};

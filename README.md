@@ -92,8 +92,10 @@ Apache POI를 사용해 실제 ERP에서 다운로드한 `일자별판매실적�
 * 숫자 Excel Numeric Cell 처리
 * 천 단위 콤마
 * 금액 컬럼 소수점 2자리 표시
+* `application.properties`를 UTF-8로 읽도록 처리하여 한글 파일명 및 설정값 깨짐 문제를 해결했습니다.
 
 컬럼명은 Stored Procedure의 한글 Alias를 `ResultSetMetaData`로 읽어 동적으로 생성합니다.
+
 
 ---
 

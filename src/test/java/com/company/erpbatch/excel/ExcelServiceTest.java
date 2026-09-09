@@ -21,8 +21,8 @@ class ExcelServiceTest {
     @Test
     void replacesTimestampAndAddsExtension() {
         ExcelService service = new ExcelService();
-        Path path = service.resolveOutputPath(Path.of("C:/output"), "report_{timestamp}", LocalDateTime.of(2026, 9, 8, 1, 2, 3));
-        assertEquals(Path.of("C:/output/report_20260908_010203.xlsx"), path);
+        Path path = service.resolveOutputPath(Path.of("C:/output"), "GALA_일자별판매실적분석_{timestamp}.xlsx", LocalDateTime.of(2026, 9, 9, 13, 51));
+        assertEquals(Path.of("C:/output/GALA_일자별판매실적분석_260909_1351.xlsx"), path);
     }
 
     @Test

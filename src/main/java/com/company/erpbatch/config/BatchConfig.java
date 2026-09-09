@@ -3,9 +3,10 @@ package com.company.erpbatch.config;
 import com.company.erpbatch.exception.BatchException;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.BufferedReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 /** 외부 application.properties의 배치 설정을 제공합니다. */
@@ -23,8 +24,8 @@ public final class BatchConfig {
             throw new BatchException("설정 파일을 찾을 수 없습니다: " + configPath.toAbsolutePath());
         }
         Properties properties = new Properties();
-        try (InputStream input = Files.newInputStream(configPath)) {
-            properties.load(input);
+        try (BufferedReader reader = Files.newBufferedReader(configPath, StandardCharsets.UTF_8)) {
+            properties.load(reader);
         } catch (IOException exception) {
             throw new BatchException("설정 파일을 읽을 수 없습니다: " + configPath.toAbsolutePath(), exception);
         }
