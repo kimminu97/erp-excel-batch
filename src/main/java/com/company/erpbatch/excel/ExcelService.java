@@ -51,7 +51,11 @@ public final class ExcelService {
     }
 
     public ExcelWriteResult write(ResultSet resultSet, Path outputDirectory, String fileNamePattern, LocalDateTime timestamp) throws SQLException {
-        Path outputFile = resolveOutputPath(outputDirectory, fileNamePattern, timestamp);
+        return write(resultSet, outputDirectory, fileNamePattern, timestamp, null);
+    }
+
+    public ExcelWriteResult write(ResultSet resultSet, Path outputDirectory, String fileNamePattern, LocalDateTime timestamp, String period) throws SQLException {
+        Path outputFile = resolveOutputPath(outputDirectory, fileNamePattern, timestamp, period);
         log.info("Excel 생성을 시작합니다: {}", outputFile.toAbsolutePath());
         try {
             Files.createDirectories(outputDirectory);
@@ -75,8 +79,14 @@ public final class ExcelService {
     }
 
     public Path resolveOutputPath(Path outputDirectory, String pattern, LocalDateTime timestamp) {
+        return resolveOutputPath(outputDirectory, pattern, timestamp, null);
+    }
+
+    public Path resolveOutputPath(Path outputDirectory, String pattern, LocalDateTime timestamp, String period) {
         if (pattern == null || pattern.isBlank()) throw new BatchException("Excel 파일명 패턴이 비어 있습니다.");
-        String fileName = pattern.replace("{timestamp}", TIMESTAMP_FORMAT.format(timestamp));
+        String fileName = pattern
+                .replace("{timestamp}", TIMESTAMP_FORMAT.format(timestamp))
+                .replace("{period}", period == null ? "{period}" : period);
         if (!fileName.toLowerCase().endsWith(".xlsx")) fileName += ".xlsx";
         return outputDirectory.resolve(fileName);
     }

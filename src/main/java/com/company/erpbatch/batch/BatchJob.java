@@ -42,8 +42,8 @@ public final class BatchJob {
             return null;
         }
         String resultSetName = RESULT_SET_NAMES.get(resultSetIndex);
-        String pattern = config.outputFileNamePattern().replace("{period}", resultSetName);
-        ExcelService.ExcelWriteResult result = excelService.write(resultSet, config.outputDirectory(), pattern, executionTime);
+        ExcelService.ExcelWriteResult result = excelService.write(
+                resultSet, config.outputDirectory(), config.outputFileNamePattern(), executionTime, resultSetName);
         log.info("{} Excel 생성 완료: {}", resultSetName, result.outputFile().toAbsolutePath());
         return result;
     }

@@ -35,15 +35,17 @@ public final class BatchConfig {
     public String databaseUrl() { return required("db.url"); }
     public String databaseUsername() { return required("db.username"); }
     public String databasePassword() { return required("db.password"); }
-    public String storedProcedureName() { return required("stored-procedure.name"); }
+    public String storedProcedureName() { return required("db.stored-procedure", "stored-procedure.name"); }
     public Path outputDirectory() { return Path.of(required("output.directory")); }
-    public String outputFileNamePattern() { return required("output.file-name-pattern"); }
+    public String outputFileNamePattern() { return required("excel.output-file-name-pattern", "output.file-name-pattern"); }
 
-    private String required(String key) {
-        String value = properties.getProperty(key);
-        if (value == null || value.isBlank()) {
-            throw new BatchException("필수 설정값이 비어 있습니다: " + key);
+    private String required(String... keys) {
+        for (String key : keys) {
+            String value = properties.getProperty(key);
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
         }
-        return value.trim();
+        throw new BatchException("필수 설정값이 비어 있습니다: " + keys[0]);
     }
 }

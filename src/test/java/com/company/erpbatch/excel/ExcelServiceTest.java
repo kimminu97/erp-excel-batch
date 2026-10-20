@@ -11,6 +11,7 @@ import javax.sql.rowset.RowSetProvider;
 import java.nio.file.Path;
 import java.sql.Types;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,10 +21,31 @@ class ExcelServiceTest {
     Path tempDir;
 
     @Test
-    void replacesTimestampAndAddsExtension() {
+    void replacesTimestampAndPeriodUsingConfiguredPattern() {
         ExcelService service = new ExcelService();
-        Path path = service.resolveOutputPath(Path.of("C:/output"), "GALA_일자별판매실적분석_{timestamp}.xlsx", LocalDateTime.of(2026, 9, 9, 13, 51));
-        assertEquals(Path.of("C:/output/GALA_일자별판매실적분석_260909.xlsx"), path);
+        LocalDateTime timestamp = LocalDateTime.of(2026, 10, 20, 13, 51);
+        String pattern = "GALA_일자별판매실적분석_3PP_{timestamp}_{period}.xlsx";
+
+        List<String> periods = List.of("당월", "전년동월", "전월");
+        List<String> expectedNames = List.of(
+                "GALA_일자별판매실적분석_3PP_261020_당월.xlsx",
+                "GALA_일자별판매실적분석_3PP_261020_전년동월.xlsx",
+                "GALA_일자별판매실적분석_3PP_261020_전월.xlsx");
+        for (int index = 0; index < periods.size(); index++) {
+            Path path = service.resolveOutputPath(Path.of("C:/output"), pattern, timestamp, periods.get(index));
+            assertEquals(Path.of("C:/output").resolve(expectedNames.get(index)), path);
+        }
+    }
+
+    @Test
+    void appliesDifferentConfiguredFileNamePatternWithoutCodeChanges() {
+        ExcelService service = new ExcelService();
+
+        Path path = service.resolveOutputPath(
+                Path.of("C:/output"), "GALA_재고현황_{period}_{timestamp}.xlsx",
+                LocalDateTime.of(2026, 10, 20, 13, 51), "당월");
+
+        assertEquals(Path.of("C:/output/GALA_재고현황_당월_261020.xlsx"), path);
     }
 
     @Test

@@ -5,10 +5,10 @@ db.username=ace
 db.password=Gala2)21)7)9##
 
 # 호출할 저장 프로시저 이름. 실제 이름으로 변경하십시오.
-stored-procedure.name=galadev_SWSLSalesListAnalysisDailyAuto_Daily_3PP
+db.stored-procedure=galadev_SWSLSalesListAnalysisDailyAuto_Daily_3PP
 # 저장 프로시저 입력값은 향후 전용 배치 구현에서 추가할 수 있습니다.
 
 # Windows 공유 폴더를 포함한 Excel 저장 경로입니다.
 output.directory=C:/erp-excel-output
 # {timestamp}는 실행 시 yyMMdd 형식으로 치환됩니다.
-output.file-name-pattern=GALA_일자별판매실적분석_{period}_{timestamp}.xlsx
+excel.output-file-name-pattern=GALA_일자별판매실적분석_3PP_{timestamp}_{period}.xlsx
