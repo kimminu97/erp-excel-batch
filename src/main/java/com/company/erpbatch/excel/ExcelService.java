@@ -37,7 +37,7 @@ import java.util.Set;
 /** ResultSet을 일반적인 Excel 통합 문서로 저장합니다. */
 public final class ExcelService {
     private static final Logger log = LoggerFactory.getLogger(ExcelService.class);
-    private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyMMdd_HHmm");
+    private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyMMdd");
     private static final int REPORT_COLUMN_COUNT = 33;
     private static final int[] COLUMN_WIDTHS = {16, 16, 13, 18, 16, 16, 16, 16, 25, 16, 16, 8, 16, 8, 16, 8,
             16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 10, 15, 16, 10};
@@ -47,16 +47,21 @@ public final class ExcelService {
     private static final Set<String> TWO_DECIMAL_HEADERS = Set.of("판매기준가", "판매단가", "판매금액", "부가세액", "판매금액계");
 
     public ExcelWriteResult write(ResultSet resultSet, Path outputDirectory, String fileNamePattern) throws SQLException {
-        Path outputFile = resolveOutputPath(outputDirectory, fileNamePattern, LocalDateTime.now());
+        return write(resultSet, outputDirectory, fileNamePattern, LocalDateTime.now());
+    }
+
+    public ExcelWriteResult write(ResultSet resultSet, Path outputDirectory, String fileNamePattern, LocalDateTime timestamp) throws SQLException {
+        Path outputFile = resolveOutputPath(outputDirectory, fileNamePattern, timestamp);
         log.info("Excel 생성을 시작합니다: {}", outputFile.toAbsolutePath());
         try {
             Files.createDirectories(outputDirectory);
             try (XSSFWorkbook workbook = new XSSFWorkbook()) {
                 XSSFSheet sheet = workbook.createSheet("Report");
                 List<ExcelColumn> columns = columns(resultSet.getMetaData());
-                writeTitle(sheet, workbook);
-                writeHeader(sheet, columns, workbook);
-                long rowCount = writeRows(sheet, columns, resultSet, workbook);
+                ExcelStyles styles = new ExcelStyles(workbook);
+                writeTitle(sheet, styles.title());
+                writeHeader(sheet, columns, styles.header());
+                long rowCount = writeRows(sheet, columns, resultSet, styles);
                 applyColumnWidths(sheet);
                 try (var output = Files.newOutputStream(outputFile)) {
                     workbook.write(output);
@@ -84,27 +89,26 @@ public final class ExcelService {
         return columns;
     }
 
-    private void writeTitle(XSSFSheet sheet, XSSFWorkbook workbook) {
+    private void writeTitle(XSSFSheet sheet, CellStyle titleStyle) {
         Row row = sheet.createRow(0);
         row.setHeightInPoints(50);
         Cell cell = row.createCell(0);
         cell.setCellValue("일자별판매실적분석");
-        cell.setCellStyle(createTitleStyle(workbook));
+        cell.setCellStyle(titleStyle);
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, REPORT_COLUMN_COUNT - 1));
     }
 
-    private void writeHeader(XSSFSheet sheet, List<ExcelColumn> columns, XSSFWorkbook workbook) {
-        CellStyle style = createHeaderStyle(workbook);
+    private void writeHeader(XSSFSheet sheet, List<ExcelColumn> columns, CellStyle headerStyle) {
         Row row = sheet.createRow(1);
         row.setHeightInPoints(20);
         for (int index = 0; index < columns.size(); index++) {
             Cell cell = row.createCell(index);
             cell.setCellValue(columns.get(index).header());
-            cell.setCellStyle(style);
+            cell.setCellStyle(headerStyle);
         }
     }
 
-    private long writeRows(XSSFSheet sheet, List<ExcelColumn> columns, ResultSet resultSet, XSSFWorkbook workbook) throws SQLException {
+    private long writeRows(XSSFSheet sheet, List<ExcelColumn> columns, ResultSet resultSet, ExcelStyles styles) throws SQLException {
         long count = 0;
         while (resultSet.next()) {
             Row row = sheet.createRow((int) count + 2);
@@ -114,7 +118,7 @@ public final class ExcelService {
                 Cell cell = row.createCell(index);
                 Object value = resultSet.getObject(columns.get(index).index());
                 writeCellValue(cell, value);
-                cell.setCellStyle(styleFor(value, columns.get(index), totalRow, workbook));
+                cell.setCellStyle(styleFor(value, columns.get(index), totalRow, styles));
             }
             count++;
         }
@@ -147,20 +151,23 @@ public final class ExcelService {
         return style;
     }
 
-    private CellStyle styleFor(Object value, ExcelColumn column, boolean totalRow, XSSFWorkbook workbook) {
-        if (value instanceof Number number) {
-            int decimalPlaces = TWO_DECIMAL_HEADERS.contains(column.header()) ? 2 : decimalPlaces(number);
-            return createNumberStyle(workbook, totalRow, decimalPlaces);
+    private CellStyle styleFor(Object value, ExcelColumn column, boolean totalRow, ExcelStyles styles) {
+        if (value instanceof Number) {
+            if (TWO_DECIMAL_HEADERS.contains(column.header())) {
+                return totalRow ? styles.totalMoney() : styles.bodyMoney();
+            }
+            if (decimalPlaces((Number) value) == 0) {
+                return totalRow ? styles.totalNumber() : styles.bodyNumber();
+            }
+            return totalRow ? styles.totalDecimal() : styles.bodyDecimal();
         }
         if (isDateValue(value)) {
-            return createDateStyle(workbook, totalRow);
+            return totalRow ? styles.totalDate() : styles.bodyDate();
         }
-        return createBodyStyle(workbook, totalRow, HorizontalAlignment.LEFT);
+        return totalRow ? styles.totalText() : styles.bodyText();
     }
 
-    private CellStyle createBodyStyle(XSSFWorkbook workbook, boolean totalRow, HorizontalAlignment alignment) {
-        Font font = workbook.createFont();
-        font.setFontHeightInPoints((short) 10);
+    private CellStyle createBodyStyle(XSSFWorkbook workbook, Font font, boolean totalRow, HorizontalAlignment alignment) {
         XSSFCellStyle style = workbook.createCellStyle();
         style.setFont(font);
         style.setAlignment(alignment);
@@ -170,19 +177,6 @@ public final class ExcelService {
             style.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
         }
         applyThinBorder(style);
-        return style;
-    }
-
-    private CellStyle createNumberStyle(XSSFWorkbook workbook, boolean totalRow, int decimalPlaces) {
-        XSSFCellStyle style = (XSSFCellStyle) createBodyStyle(workbook, totalRow, HorizontalAlignment.RIGHT);
-        String format = decimalPlaces == 0 ? "#,##0" : "#,##0." + "0".repeat(decimalPlaces);
-        style.setDataFormat(workbook.createDataFormat().getFormat(format));
-        return style;
-    }
-
-    private CellStyle createDateStyle(XSSFWorkbook workbook, boolean totalRow) {
-        XSSFCellStyle style = (XSSFCellStyle) createBodyStyle(workbook, totalRow, HorizontalAlignment.LEFT);
-        style.setDataFormat(workbook.createDataFormat().getFormat("yyyy-MM-dd"));
         return style;
     }
 
@@ -233,6 +227,64 @@ public final class ExcelService {
 
     private static XSSFColor color(int red, int green, int blue) {
         return new XSSFColor(new byte[]{(byte) red, (byte) green, (byte) blue}, new DefaultIndexedColorMap());
+    }
+
+    private final class ExcelStyles {
+        private final CellStyle title;
+        private final CellStyle header;
+        private final CellStyle totalText;
+        private final CellStyle totalDate;
+        private final CellStyle totalNumber;
+        private final CellStyle totalDecimal;
+        private final CellStyle totalMoney;
+        private final CellStyle bodyText;
+        private final CellStyle bodyDate;
+        private final CellStyle bodyNumber;
+        private final CellStyle bodyDecimal;
+        private final CellStyle bodyMoney;
+
+        private ExcelStyles(XSSFWorkbook workbook) {
+            Font bodyFont = workbook.createFont();
+            bodyFont.setFontHeightInPoints((short) 10);
+            short dateFormat = workbook.createDataFormat().getFormat("yyyy-MM-dd");
+            short integerFormat = workbook.createDataFormat().getFormat("#,##0");
+            short numberFormat = workbook.createDataFormat().getFormat("#,##0.###############");
+            short moneyFormat = workbook.createDataFormat().getFormat("#,##0.00");
+
+            bodyText = createBodyStyle(workbook, bodyFont, false, HorizontalAlignment.LEFT);
+            bodyDate = createBodyStyle(workbook, bodyFont, false, HorizontalAlignment.LEFT);
+            bodyDate.setDataFormat(dateFormat);
+            bodyNumber = createBodyStyle(workbook, bodyFont, false, HorizontalAlignment.RIGHT);
+            bodyNumber.setDataFormat(integerFormat);
+            bodyDecimal = createBodyStyle(workbook, bodyFont, false, HorizontalAlignment.RIGHT);
+            bodyDecimal.setDataFormat(numberFormat);
+            bodyMoney = createBodyStyle(workbook, bodyFont, false, HorizontalAlignment.RIGHT);
+            bodyMoney.setDataFormat(moneyFormat);
+            totalText = createBodyStyle(workbook, bodyFont, true, HorizontalAlignment.LEFT);
+            totalDate = createBodyStyle(workbook, bodyFont, true, HorizontalAlignment.LEFT);
+            totalDate.setDataFormat(dateFormat);
+            totalNumber = createBodyStyle(workbook, bodyFont, true, HorizontalAlignment.RIGHT);
+            totalNumber.setDataFormat(integerFormat);
+            totalDecimal = createBodyStyle(workbook, bodyFont, true, HorizontalAlignment.RIGHT);
+            totalDecimal.setDataFormat(numberFormat);
+            totalMoney = createBodyStyle(workbook, bodyFont, true, HorizontalAlignment.RIGHT);
+            totalMoney.setDataFormat(moneyFormat);
+            title = createTitleStyle(workbook);
+            header = createHeaderStyle(workbook);
+        }
+
+        private CellStyle title() { return title; }
+        private CellStyle header() { return header; }
+        private CellStyle totalText() { return totalText; }
+        private CellStyle totalDate() { return totalDate; }
+        private CellStyle totalNumber() { return totalNumber; }
+        private CellStyle totalDecimal() { return totalDecimal; }
+        private CellStyle totalMoney() { return totalMoney; }
+        private CellStyle bodyText() { return bodyText; }
+        private CellStyle bodyDate() { return bodyDate; }
+        private CellStyle bodyNumber() { return bodyNumber; }
+        private CellStyle bodyDecimal() { return bodyDecimal; }
+        private CellStyle bodyMoney() { return bodyMoney; }
     }
 
     public record ExcelWriteResult(Path outputFile, long rowCount) { }

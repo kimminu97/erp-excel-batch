@@ -19,7 +19,7 @@ public final class StoredProcedureExecutor {
         this.databaseConnection = databaseConnection;
     }
 
-    public <T> T execute(String procedureName, List<?> parameters, ResultSetHandler<T> handler) {
+    public <T> List<T> executeAll(String procedureName, List<?> parameters, IndexedResultSetHandler<T> handler) {
         String callSyntax = createCallSyntax(procedureName, parameters.size());
         log.info("저장 프로시저 실행을 시작합니다: {}", procedureName);
         try (Connection connection = databaseConnection.open();
@@ -27,21 +27,26 @@ public final class StoredProcedureExecutor {
             for (int index = 0; index < parameters.size(); index++) {
                 statement.setObject(index + 1, parameters.get(index));
             }
-            boolean hasResultSet = statement.execute();
-            while (!hasResultSet && statement.getUpdateCount() != -1) {
-                hasResultSet = statement.getMoreResults();
-            }
-            if (!hasResultSet) {
-                throw new BatchException("저장 프로시저가 ResultSet을 반환하지 않았습니다: " + procedureName);
-            }
-            try (ResultSet resultSet = statement.getResultSet()) {
-                T result = handler.handle(resultSet);
-                log.info("저장 프로시저 실행이 완료되었습니다: {}", procedureName);
-                return result;
-            }
+            List<T> results = consumeAllResultSets(statement, handler);
+            log.info("저장 프로시저 실행이 완료되었습니다: {}. ResultSet 수: {}", procedureName, results.size());
+            return results;
         } catch (SQLException exception) {
             throw new BatchException("저장 프로시저 실행 또는 ResultSet 처리에 실패했습니다: " + procedureName, exception);
         }
+    }
+
+    static <T> List<T> consumeAllResultSets(CallableStatement statement, IndexedResultSetHandler<T> handler) throws SQLException {
+        List<T> results = new java.util.ArrayList<>();
+        boolean hasResultSet = statement.execute();
+        while (hasResultSet || statement.getUpdateCount() != -1) {
+            if (hasResultSet) {
+                try (ResultSet resultSet = statement.getResultSet()) {
+                    results.add(handler.handle(results.size(), resultSet));
+                }
+            }
+            hasResultSet = statement.getMoreResults();
+        }
+        return results;
     }
 
     private String createCallSyntax(String procedureName, int parameterCount) {
@@ -54,7 +59,7 @@ public final class StoredProcedureExecutor {
     }
 
     @FunctionalInterface
-    public interface ResultSetHandler<T> {
-        T handle(ResultSet resultSet) throws SQLException;
+    public interface IndexedResultSetHandler<T> {
+        T handle(int resultSetIndex, ResultSet resultSet) throws SQLException;
     }
 }

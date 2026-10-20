@@ -13,6 +13,7 @@ import java.sql.Types;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExcelServiceTest {
     @TempDir
@@ -22,7 +23,7 @@ class ExcelServiceTest {
     void replacesTimestampAndAddsExtension() {
         ExcelService service = new ExcelService();
         Path path = service.resolveOutputPath(Path.of("C:/output"), "GALA_일자별판매실적분석_{timestamp}.xlsx", LocalDateTime.of(2026, 9, 9, 13, 51));
-        assertEquals(Path.of("C:/output/GALA_일자별판매실적분석_260909_1351.xlsx"), path);
+        assertEquals(Path.of("C:/output/GALA_일자별판매실적분석_260909.xlsx"), path);
     }
 
     @Test
@@ -46,6 +47,18 @@ class ExcelServiceTest {
             assertEquals(CellType.NUMERIC, sheet.getRow(2).getCell(2).getCellType());
             assertEquals("yyyy-MM-dd", sheet.getRow(2).getCell(2).getCellStyle().getDataFormatString());
             assertEquals(25 * 256, sheet.getColumnWidth(8));
+        }
+    }
+
+    @Test
+    void reusesCellStylesForThousandsOfRows() throws Exception {
+        ExcelService service = new ExcelService();
+        ExcelService.ExcelWriteResult result = service.write(largeRows(3_000), tempDir, "large-sales.xlsx");
+
+        assertEquals(3_000, result.rowCount());
+        try (XSSFWorkbook workbook = new XSSFWorkbook(result.outputFile().toFile())) {
+            assertTrue(workbook.getNumCellStyles() <= 20,
+                    () -> "행 수와 무관하게 제한된 스타일만 생성해야 합니다. 실제 스타일 수: " + workbook.getNumCellStyles());
         }
     }
 
@@ -84,6 +97,41 @@ class ExcelServiceTest {
         rowSet.updateDouble(21, 4027372);
         rowSet.updateDouble(22, 123.45);
         rowSet.insertRow();
+        rowSet.moveToCurrentRow();
+        rowSet.beforeFirst();
+        return rowSet;
+    }
+
+    private CachedRowSet largeRows(int rowCount) throws Exception {
+        CachedRowSet rowSet = RowSetProvider.newFactory().createCachedRowSet();
+        RowSetMetaDataImpl metadata = new RowSetMetaDataImpl();
+        metadata.setColumnCount(5);
+        metadata.setColumnName(1, "구분");
+        metadata.setColumnLabel(1, "구분");
+        metadata.setColumnType(1, Types.VARCHAR);
+        metadata.setColumnName(2, "일자");
+        metadata.setColumnLabel(2, "일자");
+        metadata.setColumnType(2, Types.DATE);
+        metadata.setColumnName(3, "수량");
+        metadata.setColumnLabel(3, "수량");
+        metadata.setColumnType(3, Types.INTEGER);
+        metadata.setColumnName(4, "판매금액");
+        metadata.setColumnLabel(4, "판매금액");
+        metadata.setColumnType(4, Types.DECIMAL);
+        metadata.setColumnName(5, "비율");
+        metadata.setColumnLabel(5, "비율");
+        metadata.setColumnType(5, Types.DECIMAL);
+        rowSet.setMetaData(metadata);
+
+        for (int index = 0; index < rowCount; index++) {
+            rowSet.moveToInsertRow();
+            rowSet.updateString(1, "일반");
+            rowSet.updateDate(2, java.sql.Date.valueOf("2026-09-01"));
+            rowSet.updateInt(3, index);
+            rowSet.updateDouble(4, 1_000.50);
+            rowSet.updateDouble(5, 12.345);
+            rowSet.insertRow();
+        }
         rowSet.moveToCurrentRow();
         rowSet.beforeFirst();
         return rowSet;
